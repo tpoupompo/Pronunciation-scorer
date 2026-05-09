@@ -545,21 +545,22 @@
     return micStream;
   }
 
-  async function startMeter(stream) {
+  async function startMeter(stream, existingCtx) {
     try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // AudioContext は呼び出し元で同期生成済みのものを使う（Safari対策）
+      audioCtx = existingCtx || new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.78;
       audioCtx.createMediaStreamSource(stream).connect(analyser);
       initBarHistory();
-      const wrap = document.getElementById('meterWrap');
-      wrap.style.display = 'block';
+      document.getElementById('meterWrap').style.display = 'block';
       resizeCanvas();
       drawMeter();
     } catch (e) {
       console.warn('Audio meter unavailable:', e);
+      // メーターが使えなくてもマイクは続行
     }
   }
 
@@ -778,26 +779,31 @@
   async function startRec() {
     if (!SpeechRec || !currentText.trim()) return;
 
+    // ── AudioContext をここで同期生成（Safari はawait後だとsuspendedになる）
+    let syncAudioCtx = null;
+    try {
+      syncAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (_) {}
+
     document.getElementById('statusText').textContent = 'マイクの準備中…';
     document.getElementById('recBtn').disabled = true;
 
     let stream;
     try {
-      // マイク取得は1回だけ — メーターと音声認識で共有
       stream = await getMicStream();
     } catch (e) {
       const msgs = { NotAllowedError: 'マイクのアクセスが拒否されています', NotFoundError: 'マイクが見つかりません' };
       document.getElementById('statusText').textContent = '⚠️ ' + (msgs[e.name] || e.message);
       document.getElementById('recBtn').disabled = false;
+      if (syncAudioCtx) syncAudioCtx.close();
       return;
     }
 
-    // メーター起動（既に権限あり、2度目のダイアログなし）
-    await startMeter(stream);
+    await startMeter(stream, syncAudioCtx);
 
     recognition = new SpeechRec();
     recognition.lang = 'en-US';
-    recognition.continuous = true;      // ← 息継ぎで止まらない
+    recognition.continuous = true;
     recognition.interimResults = false;
     recognition.maxAlternatives = 5;
 
@@ -811,7 +817,6 @@
     };
 
     recognition.onresult = (e) => {
-      // continuous=true では結果が随時届く。全て蓄積する
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (!e.results[i].isFinal) continue;
         const alts = Array.from(e.results[i]).map(alt => ({
@@ -824,36 +829,39 @@
     };
 
     recognition.onerror = (e) => {
-      if (e.error === 'no-speech') return; // continuous中の無音は無視
+      if (e.error === 'no-speech') return;
       const msgs = { 'audio-capture': 'マイクが見つかりません', 'not-allowed': 'マイクのアクセスが拒否されています' };
       document.getElementById('statusText').textContent = '⚠️ ' + (msgs[e.error] || e.error);
       stopRec(false);
     };
 
-    // continuous=true ではユーザーが stop() するまで onend は来ない
+    // Safari は continuous でも silence で onend が来るので再起動する
     recognition.onend = () => {
-      if (isRecording) recognition.start(); // 環境によって切れる場合に再起動
+      if (!isRecording) return;
+      try { recognition.start(); } catch (_) {}
     };
 
     recognition.start();
   }
 
-  // score=true のとき蓄積結果を採点する
   function stopRec(score = true) {
-    isRecording = false;
+    isRecording = false; // まず false に → onend の再起動ガードが効く
     stopMeter();
-    try { if (recognition) { recognition.onend = null; recognition.stop(); } } catch (_) {}
+    if (recognition) {
+      recognition.onend = null; // stop() 前に nullify してレースを防ぐ
+      try { recognition.stop(); } catch (_) {}
+      recognition = null;
+    }
     document.getElementById('recBtn').disabled = false;
     document.getElementById('recBtn').className = 'rec-btn';
     document.getElementById('recLabel').textContent = '録音開始';
 
     if (score && accumulatedAlts.length > 0) {
-      // 複数フレーズの alts をマージ: 各候補インデックスで単語を結合
       const maxAltCount = Math.max(...accumulatedAlts.map(a => a.length));
       const merged = [];
       for (let ai = 0; ai < maxAltCount; ai++) {
         const words = accumulatedAlts.flatMap(phraseAlts => {
-          const alt = phraseAlts[ai] ?? phraseAlts[0]; // 候補数が少ない場合はalt[0]で代用
+          const alt = phraseAlts[ai] ?? phraseAlts[0];
           return alt.words;
         });
         const conf = accumulatedAlts.reduce((sum, pa) => {
