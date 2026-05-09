@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>English Pronunciation Scorer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f4f0;
+      --surface: #ffffff;
+      --surface2: #f0eeea;
+      --border: rgba(0,0,0,0.1);
+      --border2: rgba(0,0,0,0.2);
+      --text: #1a1a18;
+      --text2: #5a5a56;
+      --text3: #9a9a94;
+      --info-bg: #e6f1fb;
+      --info-border: #378add;
+      --info-text: #0c447c;
+      --danger-bg: #fcebeb;
+      --danger-border: #f09595;
+      --danger-text: #a32d2d;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1e1e1c;
+        --surface: #2a2a28;
+        --surface2: #323230;
+        --border: rgba(255,255,255,0.1);
+        --border2: rgba(255,255,255,0.2);
+        --text: #f0eeea;
+        --text2: #a0a09a;
+        --text3: #606058;
+        --info-bg: #042c53;
+        --info-border: #185fa5;
+        --info-text: #85b7eb;
+        --danger-bg: #501313;
+        --danger-border: #a32d2d;
+        --danger-text: #f09595;
+      }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    header p {
+      font-size: 14px;
+      color: var(--text2);
+      margin-top: 4px;
+    }
+
+    .label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .preset-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .preset-btn {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 0.5px solid var(--border2);
+      background: transparent;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+
+    .preset-btn:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    .preset-btn.active {
+      background: var(--info-bg);
+      border-color: var(--info-border);
+      color: var(--info-text);
+    }
+
+    .target-display {
+      font-size: 22px;
+      line-height: 1.6;
+      font-weight: 400;
+      color: var(--text);
+      min-height: 36px;
+      margin-bottom: 12px;
+    }
+
+    .custom-input {
+      width: 100%;
+      font-size: 15px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 0.5px solid var(--border2);
+      background: var(--surface2);
+      color: var(--text);
+      resize: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+
+    .custom-input:focus {
+      outline: none;
+      border-color: var(--info-border);
+    }
+
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .rec-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      border: 0.5px solid var(--border2);
+      background: transparent;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .rec-btn:hover { background: var(--surface2); }
+
+    .rec-btn.recording {
+      border-color: var(--danger-border);
+      color: var(--danger-text);
+      background: var(--danger-bg);
+    }
+
+    .pulse {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .recording .pulse {
+      animation: pulse 0.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+
+
+    .status-text {
+      font-size: 13px;
+      color: var(--text2);
+    }
+
+    /* Score display */
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+
+    .score-metric {
+      background: var(--surface2);
+      border-radius: var(--radius-sm);
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .score-metric .val {
+      font-size: 30px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .score-metric .lbl {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 4px;
+    }
+
+    /* Score bar */
+    .score-bar-wrap {
+      background: var(--surface2);
+      border-radius: 4px;
+      height: 8px;
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    /* Word chips */
+    .word-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .word-chip {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      border: 0.5px solid transparent;
+      min-width: 44px;
+    }
+
+    .word-chip .w-target { font-size: 15px; font-weight: 500; }
+    .word-chip .w-heard  { font-size: 11px; opacity: 0.75; }
+    .word-chip .w-score  { font-size: 11px; font-weight: 600; }
+
+    .chip-perfect { background: #eaf3de; border-color: #97c459; color: #3b6d11; }
+    .chip-good    { background: #faeeda; border-color: #ef9f27; color: #633806; }
+    .chip-poor    { background: #fcebeb; border-color: #f09595; color: #a32d2d; }
+    .chip-miss    { background: var(--surface2); border-color: var(--border); color: var(--text3); }
+
+    @media (prefers-color-scheme: dark) {
+      .chip-perfect { background: #173404; border-color: #3b6d11; color: #97c459; }
+      .chip-good    { background: #412402; border-color: #854f0b; color: #ef9f27; }
+      .chip-poor    { background: #501313; border-color: #a32d2d; color: #f09595; }
+    }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--text2);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .heard-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 1rem;
+      margin-bottom: 6px;
+    }
+
+    .heard-text {
+      font-size: 14px;
+      color: var(--text2);
+      border-left: 2px solid var(--border2);
+      padding-left: 10px;
+      font-style: italic;
+    }
+
+    .tip-box {
+      background: var(--info-bg);
+      border: 0.5px solid var(--info-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--info-text);
+      margin-bottom: 1rem;
+    }
+
+    .no-support {
+      background: var(--danger-bg);
+      border: 0.5px solid var(--danger-border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      color: var(--danger-text);
+      font-size: 14px;
+      margin-bottom: 1rem;
+    }
+
+    /* Audio meter */
+    .meter-wrap {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .meter-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .meter-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .meter-level-text {
+      font-size: 12px;
+      color: var(--text2);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #meterCanvas {
+      width: 100%;
+      height: 56px;
+      display: block;
+      border-radius: var(--radius-sm);
+      background: var(--surface2);
+    }
+
+    .result-hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🎙️ English Pronunciation Scorer</h1>
+    <p>英文を音読して発音を採点 — 単語ごとに色分けフィードバック</p>
+  </header>
+
+  <div class="no-support" id="noSupport" style="display:none">
+    ⚠️ このブラウザは音声認識に対応していません。<strong>Google Chrome</strong> または <strong>Microsoft Edge</strong> でお試しください。
+  </div>
+
+  <div class="tip-box" id="tipBox">
+    💡 マイクのアクセス許可を求めるダイアログが表示されたら「許可」を選択してください。
+  </div>
+
+  <!-- Presets -->
+  <p class="label">プリセット文章を選ぶ</p>
+  <div class="preset-list" id="presetList"></div>
+
+  <!-- Target sentence -->
+  <p class="label">対象テキスト（直接編集も可能）</p>
+  <div class="card">
+    <div class="target-display" id="targetDisplay"></div>
+    <textarea class="custom-input" id="customInput" rows="2" placeholder="ここに英文を入力…"></textarea>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-row">
+    <button class="rec-btn" id="recBtn" onclick="toggleRec()">
+      <span class="pulse"></span>
+      <span id="recLabel">録音開始</span>
+    </button>
+    <span class="status-text" id="statusText">マイクボタンを押して発音してください</span>
+  </div>
+
+  <!-- Audio meter -->
+  <div class="meter-wrap" id="meterWrap">
+    <div class="meter-header">
+      <span class="meter-label">音声レベル</span>
+      <span class="meter-level-text" id="meterLevelText">—</span>
+    </div>
+    <canvas id="meterCanvas" height="56"></canvas>
+  </div>
+
+  <!-- Results -->
+  <div id="resultCard" class="result-hidden">
+    <p class="label">採点結果</p>
+    <div class="card">
+      <div class="score-grid" id="scoreGrid"></div>
+      <div class="score-bar-wrap"><div class="score-bar-fill" id="scoreBar" style="width:0%"></div></div>
+
+      <div id="wordResultBlock">
+        <div class="word-row" id="wordRow"></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#97c459"></div> 完璧 90〜100点</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ef9f27"></div> 良好 60〜89点</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#f09595"></div> 要練習 〜59点</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#b4b2a9"></div> 未検出</div>
+        </div>
+      </div>
+
+      <p class="heard-label">認識されたテキスト</p>
+      <div class="heard-text" id="heardText">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const PRESETS = [
+    { label: "挨拶",       text: "Good morning! How are you doing today?" },
+    { label: "自己紹介",   text: "My name is Alex and I work as a software engineer." },
+    { label: "天気",       text: "The weather is beautiful this afternoon." },
+    { label: "依頼",       text: "Could you please help me with this problem?" },
+    { label: "旅行",       text: "I would like to book a flight to New York." },
+    { label: "ビジネス",   text: "We need to schedule a meeting for next Monday morning." },
+    { label: "舌を噛む",   text: "She sells seashells by the seashore." },
+    { label: "TH音",       text: "The thirty-three thieves thought that they thrilled the throne throughout Thursday." },
+    { label: "R/L音",      text: "Really rare rabbits run rapidly along lonely rural roads." },
+    { label: "難易度高",   text: "The thorough theoretical analysis thoroughly challenged the researchers." },
+  ];
+
+  let currentText = PRESETS[0].text;
+  let isRecording = false;
+  let recognition = null;
+  let activePreset = 0;
+  let accumulatedAlts = [];   // continuous録音中の全候補を蓄積
+
+  // Audio meter
+  let audioCtx = null;
+  let analyser = null;
+  let micStream = null;
+  let meterRaf = null;
+  let barHistory = [];
+  const BAR_COUNT = 80;
+
+  const canvas = document.getElementById('meterCanvas');
+  const ctx2d = canvas.getContext('2d');
+
+  function initBarHistory() {
+    barHistory = new Array(BAR_COUNT).fill(0);
+  }
+
+  function isDark() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0) {
+      canvas.width  = Math.round(rect.width  * (window.devicePixelRatio || 1));
+      canvas.height = Math.round(rect.height * (window.devicePixelRatio || 1));
+      ctx2d.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    }
+  }
+
+  function drawMeter() {
+    const W = canvas.getBoundingClientRect().width  || canvas.offsetWidth  || 600;
+    const H = canvas.getBoundingClientRect().height || canvas.offsetHeight || 56;
+
+    ctx2d.clearRect(0, 0, W, H);
+
+    if (analyser) {
+      const dataArr = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(dataArr);
+
+      const slice = Math.floor(dataArr.length * 0.45);
+      let sum = 0;
+      for (let i = 0; i < slice; i++) sum += dataArr[i] * dataArr[i];
+      const rms  = Math.sqrt(sum / slice);
+      const norm = Math.min(1, rms / 110);
+
+      barHistory.shift();
+      barHistory.push(norm);
+
+      const gap  = W / BAR_COUNT;
+      const barW = Math.max(1.5, gap - 1);
+      const dark = isDark();
+
+      barHistory.forEach((v, i) => {
+        const barH = Math.max(2, v * H * 0.9);
+        const x    = i * gap;
+        const y    = (H - barH) / 2;
+        const r    = dark ? Math.round(60  + v * 180) : Math.round(60  + v * 150);
+        const g    = dark ? Math.round(190 - v * 130) : Math.round(150 - v * 90);
+        const b    = 40;
+        ctx2d.fillStyle = `rgba(${r},${g},${b},${0.35 + v * 0.65})`;
+        ctx2d.fillRect(x, y, barW, barH);
+      });
+
+      const level = Math.round(norm * 100);
+      document.getElementById('meterLevelText').textContent = norm > 0.002 ? '音量 ' + level : '—';
+    }
+
+    meterRaf = requestAnimationFrame(drawMeter);
+  }
+
+  // Returns the mic stream (permission asked only once here)
+  async function getMicStream() {
+    if (micStream && micStream.active) return micStream;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    return micStream;
+  }
+
+  async function startMeter(stream) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.78;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      initBarHistory();
+      const wrap = document.getElementById('meterWrap');
+      wrap.style.display = 'block';
+      resizeCanvas();
+      drawMeter();
+    } catch (e) {
+      console.warn('Audio meter unavailable:', e);
+    }
+  }
+
+  function stopMeter() {
+    if (meterRaf) { cancelAnimationFrame(meterRaf); meterRaf = null; }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (audioCtx)  { audioCtx.close(); audioCtx = null; }
+    analyser = null;
+    document.getElementById('meterWrap').style.display = 'none';
+    document.getElementById('meterLevelText').textContent = '—';
+  }
+
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    document.getElementById('noSupport').style.display = 'block';
+    document.getElementById('tipBox').style.display = 'none';
+    document.getElementById('recBtn').disabled = true;
+  }
+
+  // Build presets
+  (function buildPresets() {
+    const list = document.getElementById('presetList');
+    PRESETS.forEach((p, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn' + (i === 0 ? ' active' : '');
+      btn.textContent = p.label;
+      btn.onclick = () => selectPreset(i);
+      list.appendChild(btn);
+    });
+  })();
+
+  function selectPreset(i) {
+    activePreset = i;
+    currentText = PRESETS[i].text;
+    document.getElementById('customInput').value = currentText;
+    document.getElementById('targetDisplay').textContent = currentText;
+    document.querySelectorAll('.preset-btn').forEach((b, j) => {
+      b.className = 'preset-btn' + (j === i ? ' active' : '');
+    });
+    document.getElementById('resultCard').className = 'result-hidden';
+  }
+
+  document.getElementById('customInput').addEventListener('input', function () {
+    currentText = this.value || '';
+    document.getElementById('targetDisplay').textContent = currentText;
+    activePreset = -1;
+    document.querySelectorAll('.preset-btn').forEach(b => b.className = 'preset-btn');
+  });
+
+
+  // ── Levenshtein ──────────────────────────────────────────
+  function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = [];
+    for (let i = 0; i <= m; i++) { dp[i] = [i]; }
+    for (let j = 0; j <= n; j++) { dp[0][j] = j; }
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        dp[i][j] = a[i-1] === b[j-1]
+          ? dp[i-1][j-1]
+          : 1 + Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1]);
+    return dp[m][n];
+  }
+
+  function strSim(t, h) {
+    if (t === h) return 1;
+    const maxLen = Math.max(t.length, h.length);
+    if (maxLen === 0) return 0;
+    return Math.max(0, 1 - levenshtein(t, h) / maxLen);
+  }
+
+  // ── 位置指定スコア ────────────────────────────────────────
+  // alt[0] の heardIdx 番目の単語を基準に、全候補を照合してスコアを返す。
+  // 各候補は words 数が違う場合があるので比例マッピングする。
+  function scoreAtPos(t, alts, heardIdx) {
+    let best = 0;
+    const base0Len = alts[0]?.words.length || 1;
+
+    for (let ai = 0; ai < alts.length; ai++) {
+      const alt = alts[ai];
+      if (!alt.words.length) continue;
+
+      // alt[0] の heardIdx をこの候補の対応位置に変換
+      const mapped = Math.round(heardIdx * alt.words.length / base0Len);
+
+      for (let di = -1; di <= 1; di++) {
+        const j = mapped + di;
+        if (j < 0 || j >= alt.words.length) continue;
+        const h = alt.words[j].toLowerCase().replace(/[^a-z']/g, '');
+        const sim = strSim(t, h);
+        if (sim < 0.5) continue;
+
+        // ランクペナルティ: alt[0]=×1.0, alt[1]=×0.80, alt[2]=×0.64 …
+        const rankMult = Math.pow(0.80, ai);
+        const confMult = Math.max(0.4, alt.confidence);
+        const shaped   = Math.pow((sim - 0.5) / 0.5, 2.2) * 100;
+        const s = Math.min(100, Math.round(shaped * rankMult * confMult));
+        if (s > best) best = s;
+      }
+    }
+    return best;
+  }
+
+  // ── 順序保証アライメント（比例位置基準）────────────────
+  // cursor方式は「1語見つからないと後ろがズレる」問題がある。
+  // 代わりに各ターゲット単語の期待位置を ti×m/n で独立計算し、
+  // その周辺窓を探索する。usedHi で同じ heard 語の二重使用を防ぐ。
+  function alignWords(targetWords, alts) {
+    const heard0 = alts[0]?.words || [];
+    const n = targetWords.length;
+    const m = heard0.length;
+    const usedHi = new Set();
+    const results = [];
+
+    for (let ti = 0; ti < n; ti++) {
+      const t = targetWords[ti].toLowerCase().replace(/[^a-z']/g, '');
+
+      // 期待位置: heard 全体を target の比率でマッピング
+      const expected = Math.round(ti * (m - 1) / Math.max(1, n - 1));
+      // 窓幅: heard/target の比 + 余裕3語
+      const slack = Math.max(3, Math.ceil(m / Math.max(1, n)) + 2);
+      const from  = Math.max(0, expected - slack);
+      const to    = Math.min(m - 1, expected + slack);
+
+      let bestScore = 0, bestHi = -1, bestHWord = '—';
+
+      for (let hi = from; hi <= to; hi++) {
+        if (usedHi.has(hi)) continue;
+        const h = (heard0[hi] || '').toLowerCase().replace(/[^a-z']/g, '');
+        if (strSim(t, h) < 0.5) continue;
+        const s = scoreAtPos(t, alts, hi);
+        if (s > bestScore) { bestScore = s; bestHi = hi; bestHWord = heard0[hi]; }
+      }
+
+      if (bestHi >= 0) usedHi.add(bestHi);
+      results.push({ score: bestScore, heardWord: bestHWord });
+    }
+    return results;
+  }
+
+  function gradeColor(score) {
+    if (score >= 90) return '#3b8a2a';
+    if (score >= 80) return '#2471a3';
+    if (score >= 70) return '#d4ac0d';
+    if (score >= 60) return '#ca6f1e';
+    return '#c0392b';
+  }
+
+  function barColor(score) {
+    if (score >= 80) return '#3b6d11';
+    if (score >= 60) return '#854f0b';
+    return '#a32d2d';
+  }
+
+  // alts = [{words, confidence}, ...]
+  function renderResults(alts) {
+    const heardText = alts[0]?.words.join(' ') || '';
+    const topConf   = alts[0]?.confidence || 0;
+
+    document.getElementById('resultCard').className = '';
+    document.getElementById('heardText').textContent =
+      heardText || '（音声を認識できませんでした）';
+
+    const targetWords    = currentText.split(/\s+/).filter(w => w);
+    const heardWordCount = heardText.split(/\s+/).filter(w => w).length;
+    const coverageRatio  = Math.min(1, heardWordCount / targetWords.length);
+
+    const grid = document.getElementById('scoreGrid');
+    const bar  = document.getElementById('scoreBar');
+    grid.innerHTML = '';
+
+    document.getElementById('wordResultBlock').style.display = '';
+    const wordRow = document.getElementById('wordRow');
+    wordRow.innerHTML = '';
+
+    const aligned = alignWords(targetWords, alts);
+    let total = 0, perfect = 0;
+
+    aligned.forEach(({ score, heardWord }, i) => {
+      total += score;
+      if (score >= 90) perfect++;
+
+      const chip = document.createElement('div');
+      const cls  = score >= 90 ? 'chip-perfect'
+                 : score >= 60 ? 'chip-good'
+                 : score >   0 ? 'chip-poor'
+                 :               'chip-miss';
+      chip.className = 'word-chip ' + cls;
+      chip.innerHTML = `<span class="w-target">${escapeHtml(targetWords[i])}</span>`
+                     + `<span class="w-heard">${escapeHtml(heardWord)}</span>`
+                     + `<span class="w-score">${score}点</span>`;
+      wordRow.appendChild(chip);
+    });
+
+    const wordAvg   = targetWords.length > 0 ? Math.round(total / targetWords.length) : 0;
+    const mainScore = Math.round(wordAvg * Math.sqrt(coverageRatio));
+    const grade     = mainScore >= 90 ? 'S' : mainScore >= 80 ? 'A'
+                    : mainScore >= 70 ? 'B' : mainScore >= 60 ? 'C' : 'D';
+
+    grid.innerHTML = `
+      <div class="score-metric"><div class="val" style="color:${gradeColor(mainScore)}">${mainScore}</div><div class="lbl">総合スコア</div></div>
+      <div class="score-metric"><div class="val" style="color:${gradeColor(mainScore)}">${grade}</div><div class="lbl">グレード</div></div>
+      <div class="score-metric"><div class="val">${perfect}/${targetWords.length}</div><div class="lbl">完璧な単語</div></div>
+      <div class="score-metric"><div class="val">${Math.round(topConf*100)}%</div><div class="lbl">認識確信度</div></div>
+    `;
+
+    bar.style.width      = mainScore + '%';
+    bar.style.background = barColor(mainScore);
+    document.getElementById('tipBox').style.display = 'none';
+  }
+
+  function toggleRec() {
+    if (isRecording) stopRec(); else startRec();
+  }
+
+  async function startRec() {
+    if (!SpeechRec || !currentText.trim()) return;
+
+    document.getElementById('statusText').textContent = 'マイクの準備中…';
+    document.getElementById('recBtn').disabled = true;
+
+    let stream;
+    try {
+      // マイク取得は1回だけ — メーターと音声認識で共有
+      stream = await getMicStream();
+    } catch (e) {
+      const msgs = { NotAllowedError: 'マイクのアクセスが拒否されています', NotFoundError: 'マイクが見つかりません' };
+      document.getElementById('statusText').textContent = '⚠️ ' + (msgs[e.name] || e.message);
+      document.getElementById('recBtn').disabled = false;
+      return;
+    }
+
+    // メーター起動（既に権限あり、2度目のダイアログなし）
+    await startMeter(stream);
+
+    recognition = new SpeechRec();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;      // ← 息継ぎで止まらない
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 5;
+
+    recognition.onstart = () => {
+      isRecording = true;
+      accumulatedAlts = [];
+      document.getElementById('recBtn').disabled = false;
+      document.getElementById('recBtn').className = 'rec-btn recording';
+      document.getElementById('recLabel').textContent = '録音中… クリックで採点';
+      document.getElementById('statusText').textContent = '話してください（息継ぎOK）…';
+    };
+
+    recognition.onresult = (e) => {
+      // continuous=true では結果が随時届く。全て蓄積する
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (!e.results[i].isFinal) continue;
+        const alts = Array.from(e.results[i]).map(alt => ({
+          words:      alt.transcript.toLowerCase().trim().split(/\s+/).filter(Boolean),
+          confidence: alt.confidence || 0,
+          transcript: alt.transcript.trim(),
+        }));
+        accumulatedAlts.push(alts);
+      }
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error === 'no-speech') return; // continuous中の無音は無視
+      const msgs = { 'audio-capture': 'マイクが見つかりません', 'not-allowed': 'マイクのアクセスが拒否されています' };
+      document.getElementById('statusText').textContent = '⚠️ ' + (msgs[e.error] || e.error);
+      stopRec(false);
+    };
+
+    // continuous=true ではユーザーが stop() するまで onend は来ない
+    recognition.onend = () => {
+      if (isRecording) recognition.start(); // 環境によって切れる場合に再起動
+    };
+
+    recognition.start();
+  }
+
+  // score=true のとき蓄積結果を採点する
+  function stopRec(score = true) {
+    isRecording = false;
+    stopMeter();
+    try { if (recognition) { recognition.onend = null; recognition.stop(); } } catch (_) {}
+    document.getElementById('recBtn').disabled = false;
+    document.getElementById('recBtn').className = 'rec-btn';
+    document.getElementById('recLabel').textContent = '録音開始';
+
+    if (score && accumulatedAlts.length > 0) {
+      // 複数フレーズの alts をマージ: 各候補インデックスで単語を結合
+      const maxAltCount = Math.max(...accumulatedAlts.map(a => a.length));
+      const merged = [];
+      for (let ai = 0; ai < maxAltCount; ai++) {
+        const words = accumulatedAlts.flatMap(phraseAlts => {
+          const alt = phraseAlts[ai] ?? phraseAlts[0]; // 候補数が少ない場合はalt[0]で代用
+          return alt.words;
+        });
+        const conf = accumulatedAlts.reduce((sum, pa) => {
+          return sum + ((pa[ai] ?? pa[0]).confidence || 0);
+        }, 0) / accumulatedAlts.length;
+        merged.push({ words, confidence: conf });
+      }
+      renderResults(merged);
+      document.getElementById('statusText').textContent = '✅ 採点完了！もう一度試すにはまた録音を押してください。';
+    } else if (score) {
+      document.getElementById('statusText').textContent = 'マイクボタンを押して発音してください';
+    }
+    accumulatedAlts = [];
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Init
+  selectPreset(0);
+</script>
+</body>
+</html>
